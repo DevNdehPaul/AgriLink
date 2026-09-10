@@ -1,0 +1,29 @@
+<div class="login-page">
+  <section class="login-visual">
+    <div class="brand"><span class="brand-mark">A</span><div><b>AgriLink</b><small>Cameroon AgriMarket</small></div></div>
+    <div class="visual-copy">
+      <span class="eyebrow">ONE PLATFORM · CONNECTED OPERATIONS</span>
+      <h1>From farm supply<br>to final delivery.</h1>
+      <p>One secure entry point for buyers, cooperatives, drivers and platform operations.</p>
+      <div class="role-grid">
+        <div><span>01</span><b>Buyers</b><small>Source & track produce</small></div>
+        <div><span>02</span><b>Cooperatives</b><small>Supply & fulfil orders</small></div>
+        <div><span>03</span><b>Drivers</b><small>Move assigned shipments</small></div>
+        <div><span>04</span><b>Operations</b><small>Coordinate the platform</small></div>
+      </div>
+    </div>
+    <div class="visual-foot"><span class="secure-dot"></span><span>Protected trade · Coordinated transport · Role-based access</span></div>
+  </section>
+
+  <main class="login-panel">
+    <form (ngSubmit)="submit()" class="login-card">
+      <div class="mobile-brand"><span class="brand-mark">A</span><div><b>AgriLink</b><small>Cameroon AgriMarket</small></div></div>
+      <div class="form-head"><span class="form-kicker">SECURE ACCESS</span><h2>Welcome back</h2><p>Enter your account details. We'll take you to the right workspace.</p></div>
+      <div class="alert alert-error" *ngIf="error()"><span>!</span>{{error()}}</div>
+      <div class="field"><label for="identifier">Email or phone</label><input id="identifier" [(ngModel)]="identifier" name="identifier" required autocomplete="username" placeholder="Enter your email or phone"></div>
+      <div class="field"><label for="password">Password</label><input id="password" [(ngModel)]="password" name="password" type="password" required autocomplete="current-password" placeholder="Enter your password"></div>
+      <button class="login-button" [disabled]="loading()"><span>{{loading()?'Signing in...':'Sign in to AgriLink'}}</span><span class="arrow" *ngIf="!loading()">→</span></button>
+      <div class="access-note"><span class="lock">◆</span><span>Your account role determines the workspace you can access.</span></div>
+    </form>
+  </main>
+</div>

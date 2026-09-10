@@ -1,0 +1,1250 @@
+// ============================================================
+// ANTCode Agri API - Initial Core Database Schema
+// ============================================================
+//
+// Database: PostgreSQL hosted on Neon
+// ORM: Prisma 7
+//
+// This initial schema covers:
+//
+// 1. Users and roles
+// 2. Buyer profiles
+// 3. Cooperative profiles
+// 4. Driver profiles
+// 5. Produce listings / inventory
+// 6. Orders
+// 7. Order items
+// 8. Temporary inventory reservations
+//
+// Payment, wallets, vehicles, shipments, dispatch and disputes
+// will be added in the next milestones.
+// ============================================================
+
+// ============================================================
+// PRISMA CLIENT GENERATOR
+// ============================================================
+//
+// Prisma generates the TypeScript client into:
+//
+// src/generated/prisma/
+//
+// Our Express application imports PrismaClient from there.
+//
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+// ============================================================
+// DATABASE
+// ============================================================
+//
+// The actual database URL is configured in prisma7.config.ts.
+//
+// We therefore only specify the database provider here.
+//
+datasource db {
+  provider = "postgresql"
+}
+
+// ============================================================
+// ENUMS
+// ============================================================
+
+// ------------------------------------------------------------
+// USER ROLE
+// ------------------------------------------------------------
+//
+// Determines which portal and protected API functionality
+// a user is allowed to access.
+//
+enum UserRole {
+  BUYER
+  COOPERATIVE
+  DRIVER
+  ADMIN
+}
+
+// ------------------------------------------------------------
+// USER ACCOUNT STATUS
+// ------------------------------------------------------------
+//
+// PENDING:
+// Account exists but may still require approval.
+//
+// ACTIVE:
+// User can normally use the platform.
+//
+// SUSPENDED:
+// Account has temporarily been disabled.
+//
+// REJECTED:
+// Registration/verification was rejected.
+//
+enum UserStatus {
+  PENDING
+  ACTIVE
+  SUSPENDED
+  REJECTED
+}
+
+enum VehicleType {
+  MOTORBIKE
+  CAR
+  VAN
+  PICKUP
+  TRUCK
+}
+
+enum VehicleStatus {
+  ACTIVE
+  MAINTENANCE
+  INACTIVE
+}
+
+// ------------------------------------------------------------
+// VERIFICATION STATUS
+// ------------------------------------------------------------
+//
+// Cooperatives and drivers need separate verification because
+// having an account does not automatically mean the business
+// or driver has been verified by the platform.
+//
+enum VerificationStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+}
+
+// ------------------------------------------------------------
+// BUYER TYPE
+// ------------------------------------------------------------
+//
+// Buyers may represent different types of customers.
+//
+// This becomes useful for analytics and marketplace features.
+//
+enum BuyerType {
+  INDIVIDUAL
+  RESTAURANT
+  HOTEL
+  RETAILER
+  WHOLESALER
+  FOOD_PROCESSOR
+  OTHER
+}
+
+// ------------------------------------------------------------
+// PRODUCE LISTING STATUS
+// ------------------------------------------------------------
+//
+// DRAFT:
+// Cooperative is still preparing the listing.
+//
+// ACTIVE:
+// Buyers can purchase from the listing.
+//
+// PAUSED:
+// Cooperative temporarily stopped sales.
+//
+// SOLD_OUT:
+// No inventory remains.
+//
+// EXPIRED:
+// Listing is no longer considered marketable.
+//
+enum ListingStatus {
+  DRAFT
+  ACTIVE
+  PAUSED
+  SOLD_OUT
+  EXPIRED
+}
+
+enum WalletEntryType {
+  DEPOSIT
+  ORDER_HOLD
+  ORDER_RELEASE
+  REFUND
+  WITHDRAWAL
+  ADJUSTMENT
+}
+
+enum WalletEntryDirection {
+  CREDIT
+  DEBIT
+}
+
+enum TransportLoadStatus {
+  ASSIGNED
+  IN_TRANSIT
+  COMPLETED
+  CANCELLED
+}
+
+enum ShipmentStatus {
+  AWAITING_ASSIGNMENT
+  ASSIGNED
+  PICKED_UP
+  IN_TRANSIT
+  DELIVERY_REPORTED
+  DELIVERED
+  DELAYED
+  REASSIGNMENT_REQUIRED
+  FAILED
+  CANCELLED
+}
+
+enum ShipmentEventType {
+  CREATED
+  DRIVER_ASSIGNED
+  PICKED_UP
+  IN_TRANSIT
+  LOCATION_UPDATED
+  DELIVERY_REPORTED
+  DELIVERED
+  DELAYED
+  REASSIGNMENT_REQUIRED
+  CANCELLED
+  FAILED
+}
+
+enum DepositStatus {
+  CREATED
+  PENDING
+  SUCCESSFUL
+  FAILED
+}
+
+// Cooperative payout lifecycle. REVIEW_REQUIRED is deliberately separate
+// from FAILED because a provider/network error can be ambiguous after a
+// payout request has left our server. Funds stay reserved until reconciled.
+enum WithdrawalStatus {
+  PROCESSING
+  SUCCESSFUL
+  FAILED
+  REVIEW_REQUIRED
+}
+
+enum PaymentHoldStatus {
+  ACTIVE
+  RELEASED
+  REFUNDED
+  DISPUTED
+}
+
+// A dispute freezes an active payment hold until an administrator
+// decides whether the buyer should be refunded or the cooperative paid.
+enum DisputeStatus {
+  OPEN
+  RESOLVED
+}
+
+enum DisputeResolution {
+  REFUND_BUYER
+  RELEASE_COOPERATIVE
+}
+
+// ------------------------------------------------------------
+// ORDER STATUS
+// ------------------------------------------------------------
+//
+// This represents the high-level lifecycle of an agricultural
+// order.
+//
+// Payment and shipment records will later have their own state
+// machines rather than trying to store everything here.
+//
+enum OrderStatus {
+  PENDING_PAYMENT
+  PAYMENT_SECURED
+  CONFIRMED
+  PREPARING
+  READY_FOR_PICKUP
+  IN_TRANSIT
+  DELIVERY_REPORTED
+  COMPLETED
+  CANCELLED
+  DISPUTED
+}
+
+// ------------------------------------------------------------
+// INVENTORY RESERVATION STATUS
+// ------------------------------------------------------------
+//
+// Inventory is temporarily reserved when a buyer starts an
+// order.
+//
+// Example:
+//
+// Listing:
+//   available = 2,000 kg
+//
+// Buyer orders:
+//   600 kg
+//
+// We temporarily move:
+//
+//   available = 1,400 kg
+//   reserved  = 600 kg
+//
+// If payment succeeds:
+// ACTIVE -> CONVERTED
+//
+// If order/payment fails:
+// ACTIVE -> RELEASED
+//
+// If the buyer takes too long:
+// ACTIVE -> EXPIRED
+//
+enum ReservationStatus {
+  ACTIVE
+  CONVERTED
+  RELEASED
+  EXPIRED
+}
+
+// ============================================================
+// USER
+// ============================================================
+//
+// User contains information shared by every authenticated user.
+//
+// Role-specific information belongs in the corresponding
+// profile model.
+//
+// For example:
+//
+// User
+//   ├── BuyerProfile
+//   ├── CooperativeProfile
+//   └── DriverProfile
+//
+// An ADMIN does not currently require a separate profile.
+//
+model User {
+  // Primary identifier.
+  id String @id @default(uuid())
+
+  wallet         Wallet?
+  walletDeposits WalletDeposit[]
+  walletWithdrawals WalletWithdrawal[]
+
+  openedDisputes   Dispute[] @relation("DisputeOpenedBy")
+  resolvedDisputes Dispute[] @relation("DisputeResolvedBy")
+
+  // Person's full name.
+  fullName String
+
+  // Phone is required and unique because mobile communication
+  // is important to our Cameroon-focused workflow.
+  phone String @unique
+
+  // Email is optional, but when supplied it must be unique.
+  email String? @unique
+
+  // Never store the raw password.
+  //
+  // Authentication will hash passwords using bcryptjs before
+  // they are written to the database.
+  passwordHash String
+
+  // Determines the user's application role.
+  role UserRole
+
+  // New accounts start as pending by default.
+  //
+  // Our registration service can explicitly activate buyer
+  // accounts according to the authentication workflow we choose.
+  status UserStatus @default(PENDING)
+
+  // Will later support our phone/OTP verification workflow.
+  phoneVerified Boolean @default(false)
+
+  // ----------------------------------------------------------
+  // OPTIONAL ROLE-SPECIFIC PROFILES
+  // ----------------------------------------------------------
+
+  buyerProfile       BuyerProfile?
+  cooperativeProfile CooperativeProfile?
+  driverProfile      DriverProfile?
+
+  // ----------------------------------------------------------
+  // TIMESTAMPS
+  // ----------------------------------------------------------
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // ----------------------------------------------------------
+  // INDEXES
+  // ----------------------------------------------------------
+
+  // Useful for queries such as:
+  //
+  // "find all drivers"
+  // "find all cooperatives"
+  @@index([role])
+  // Useful for admin account-management queries.
+  @@index([status])
+}
+
+// ============================================================
+// BUYER PROFILE
+// ============================================================
+//
+// Contains information that only applies to buyers.
+//
+// A buyer could be:
+//
+// - individual
+// - restaurant
+// - hotel
+// - retailer
+// - wholesaler
+// - food processor
+//
+model BuyerProfile {
+  id String @id @default(uuid())
+
+  // ----------------------------------------------------------
+  // USER RELATIONSHIP
+  // ----------------------------------------------------------
+  //
+  // @unique makes this a one-to-one relationship.
+  //
+  // One User can have at most one BuyerProfile.
+  //
+  // If the User is deleted, the BuyerProfile is also deleted.
+  //
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // ----------------------------------------------------------
+  // BUYER INFORMATION
+  // ----------------------------------------------------------
+
+  buyerType BuyerType
+
+  // Useful when the buyer represents a restaurant, hotel,
+  // retailer, wholesaler, etc.
+  businessName String?
+
+  // Main operating/delivery city.
+  //
+  // Examples:
+  // Douala
+  // Yaoundé
+  city String
+
+  // Optional default delivery address.
+  deliveryAddress String?
+
+  // ----------------------------------------------------------
+  // RELATIONSHIPS
+  // ----------------------------------------------------------
+
+  // A buyer can place many orders.
+  orders Order[]
+
+  // ----------------------------------------------------------
+  // TIMESTAMPS
+  // ----------------------------------------------------------
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Buyers will frequently be filtered geographically.
+  @@index([city])
+}
+
+// ============================================================
+// COOPERATIVE PROFILE
+// ============================================================
+//
+// Represents the farmer cooperative / agricultural supplier.
+//
+// Produce listings belong to cooperatives.
+//
+model CooperativeProfile {
+  id String @id @default(uuid())
+
+  // ----------------------------------------------------------
+  // USER RELATIONSHIP
+  // ----------------------------------------------------------
+
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // ----------------------------------------------------------
+  // COOPERATIVE INFORMATION
+  // ----------------------------------------------------------
+
+  // Cooperative/business name.
+  name String
+
+  description String?
+
+  // Broader geographical area.
+  //
+  // Example:
+  // West
+  // Centre
+  // Littoral
+  region String?
+
+  // Main city/town.
+  //
+  // Examples from our scenario:
+  // Foumbot
+  // Mbouda
+  // Obala
+  // Njombé
+  city String
+
+  // Smaller village/locality when required.
+  locality String?
+
+  // Admin verification state.
+  verificationStatus VerificationStatus @default(PENDING)
+
+  // ----------------------------------------------------------
+  // RELATIONSHIPS
+  // ----------------------------------------------------------
+
+  // One cooperative can publish many produce listings.
+  listings ProduceListing[]
+
+  // For our MVP:
+  //
+  // ONE order belongs to ONE cooperative.
+  //
+  // A buyer may purchase several produce listings in an order,
+  // but all those listings must belong to this same cooperative.
+  //
+  // Shared transport will happen between independent orders,
+  // NOT by turning an order into a multi-cooperative checkout.
+  orders Order[]
+
+  // ----------------------------------------------------------
+  // TIMESTAMPS
+  // ----------------------------------------------------------
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // ----------------------------------------------------------
+  // INDEXES
+  // ----------------------------------------------------------
+
+  @@index([verificationStatus])
+  @@index([city])
+}
+
+// ============================================================
+// DRIVER PROFILE
+// ============================================================
+//
+// Contains information specific to transport drivers.
+//
+// Vehicles and shipment assignments will be added in our
+// logistics milestone.
+//
+model DriverProfile {
+  id String @id @default(uuid())
+
+  // ----------------------------------------------------------
+  // USER RELATIONSHIP
+  // ----------------------------------------------------------
+
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // ----------------------------------------------------------
+  // DRIVER INFORMATION
+  // ----------------------------------------------------------
+
+  // Optional during registration because the admin may need to
+  // verify the driver's documents before activation.
+  licenseNumber String? @unique
+
+  // Driver's current/home operating city.
+  city String?
+
+  vehicles Vehicle[]
+
+  shipments Shipment[]
+  transportLoads TransportLoad[]
+
+  // Drivers require verification before transport assignment.
+  verificationStatus VerificationStatus @default(PENDING)
+
+  // Indicates whether the driver is currently accepting work.
+  //
+  // This is NOT the same as being verified.
+  isAvailable Boolean @default(false)
+
+  // ----------------------------------------------------------
+  // TIMESTAMPS
+  // ----------------------------------------------------------
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // ----------------------------------------------------------
+  // INDEXES
+  // ----------------------------------------------------------
+
+  @@index([verificationStatus])
+  @@index([isAvailable])
+  @@index([city])
+}
+
+// ============================================================
+// PRODUCE LISTING
+// ============================================================
+//
+// Represents agricultural produce offered for sale by a
+// cooperative.
+//
+// Example:
+//
+// Cooperative:
+//   Foumbot Farmers Cooperative
+//
+// Produce:
+//   Tomatoes
+//
+// Price:
+//   450 XAF/kg
+//
+// Total quantity:
+//   2,000 kg
+//
+model ProduceListing {
+  id String @id @default(uuid())
+
+  // ----------------------------------------------------------
+  // COOPERATIVE RELATIONSHIP
+  // ----------------------------------------------------------
+
+  cooperativeId String
+  cooperative   CooperativeProfile @relation(fields: [cooperativeId], references: [id])
+
+  // ----------------------------------------------------------
+  // PRODUCE INFORMATION
+  // ----------------------------------------------------------
+
+  // Examples:
+  // Tomatoes
+  // Plantains
+  // Potatoes
+  // Onions
+  name String
+
+  description String?
+
+  // ----------------------------------------------------------
+  // PRICING
+  // ----------------------------------------------------------
+  //
+  // Decimal is deliberately used instead of Float for monetary
+  // values.
+  //
+  // Even though XAF normally uses whole francs, Decimal keeps
+  // the monetary model safe and extensible.
+  //
+  pricePerKg Decimal @db.Decimal(12, 2)
+
+  // ----------------------------------------------------------
+  // INVENTORY
+  // ----------------------------------------------------------
+
+  // Original/current total inventory represented by the listing.
+  totalQuantityKg Decimal @db.Decimal(12, 2)
+
+  // Quantity buyers can currently reserve.
+  availableQuantityKg Decimal @db.Decimal(12, 2)
+
+  // Quantity temporarily locked by pending orders.
+  reservedQuantityKg Decimal @default(0) @db.Decimal(12, 2)
+
+  // ----------------------------------------------------------
+  // HARVEST / LOCATION
+  // ----------------------------------------------------------
+
+  // Harvest date is important for perishability-aware dispatch.
+  harvestDate DateTime
+
+  // Where the produce originates.
+  originCity String
+
+  // More precise pickup instructions/location.
+  pickupLocation String?
+
+  // ----------------------------------------------------------
+  // LISTING STATE
+  // ----------------------------------------------------------
+
+  status ListingStatus @default(DRAFT)
+
+  // ----------------------------------------------------------
+  // RELATIONSHIPS
+  // ----------------------------------------------------------
+
+  // Temporary stock reservations created during checkout.
+  reservations InventoryReservation[]
+
+  // Order lines that reference this listing.
+  orderItems OrderItem[]
+
+  // ----------------------------------------------------------
+  // TIMESTAMPS
+  // ----------------------------------------------------------
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // ----------------------------------------------------------
+  // INDEXES
+  // ----------------------------------------------------------
+
+  @@index([cooperativeId])
+  @@index([status])
+  @@index([name])
+  @@index([originCity])
+  @@index([harvestDate])
+  // Useful for marketplace queries such as:
+  //
+  // "active tomatoes in Foumbot"
+  @@index([status, originCity])
+}
+
+// ============================================================
+// ORDER
+// ============================================================
+//
+// Represents an agreement between:
+//
+// Buyer
+//    ↓
+// ONE Cooperative
+//
+// IMPORTANT MVP RULE:
+//
+// An order cannot contain listings belonging to different
+// cooperatives.
+//
+// We will enforce that rule in our order service.
+//
+// This keeps payment, pickup and settlement manageable during
+// the 48-hour sprint while still allowing shared transport
+// between separate orders.
+//
+model Order {
+  id String @id @default(uuid())
+
+  // ----------------------------------------------------------
+  // HUMAN-READABLE ORDER NUMBER
+  // ----------------------------------------------------------
+  //
+  // UUID is useful internally, but users should not need to
+  // communicate long UUIDs.
+  //
+  // Later our service can generate values such as:
+  //
+  // AGR-20260908-AB12CD
+  //
+  orderNumber String @unique
+
+  paymentHold PaymentHold?
+
+  shipment Shipment?
+
+  dispute Dispute?
+
+  // ----------------------------------------------------------
+  // BUYER RELATIONSHIP
+  // ----------------------------------------------------------
+
+  buyerId String
+  buyer   BuyerProfile @relation(fields: [buyerId], references: [id])
+
+  // ----------------------------------------------------------
+  // COOPERATIVE RELATIONSHIP
+  // ----------------------------------------------------------
+
+  cooperativeId String
+  cooperative   CooperativeProfile @relation(fields: [cooperativeId], references: [id])
+
+  // ----------------------------------------------------------
+  // ORDER STATE
+  // ----------------------------------------------------------
+
+  status OrderStatus @default(PENDING_PAYMENT)
+
+  // ----------------------------------------------------------
+  // MONEY
+  // ----------------------------------------------------------
+
+  // Cost of agricultural produce before delivery.
+  subtotal Decimal @db.Decimal(12, 2)
+
+  // Transport cost.
+  //
+  // We keep zero as the initial default because the logistics
+  // module may calculate/assign this later.
+  deliveryFee Decimal @default(0) @db.Decimal(12, 2)
+
+  // subtotal + deliveryFee
+  totalAmount Decimal @db.Decimal(12, 2)
+
+  // ----------------------------------------------------------
+  // DELIVERY DESTINATION
+  // ----------------------------------------------------------
+
+  deliveryCity    String
+  deliveryAddress String
+
+  // ----------------------------------------------------------
+  // RELATIONSHIPS
+  // ----------------------------------------------------------
+
+  // Products purchased in this order.
+  items OrderItem[]
+
+  // Inventory temporarily reserved for this order.
+  reservations InventoryReservation[]
+
+  // ----------------------------------------------------------
+  // TIMESTAMPS
+  // ----------------------------------------------------------
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // ----------------------------------------------------------
+  // INDEXES
+  // ----------------------------------------------------------
+
+  @@index([buyerId])
+  @@index([cooperativeId])
+  @@index([status])
+  @@index([createdAt])
+  // Useful for cooperative dashboards such as:
+  //
+  // "show my confirmed orders"
+  @@index([cooperativeId, status])
+  // Useful for buyer order-history queries.
+  @@index([buyerId, createdAt])
+}
+
+// ============================================================
+// ORDER ITEM
+// ============================================================
+//
+// Represents one produce line inside an order.
+//
+// Example:
+//
+// Order AGR-001
+//
+//   Tomatoes
+//   600 kg
+//   450 XAF/kg
+//   270,000 XAF
+//
+// We store produceName and unitPrice here even though similar
+// information exists on ProduceListing.
+//
+// WHY?
+//
+// Because an order is a historical transaction.
+//
+// If the cooperative later changes:
+//
+// Tomatoes 450 XAF/kg
+//
+// to:
+//
+// Tomatoes 500 XAF/kg
+//
+// the old order must still show the price at which the buyer
+// actually placed the order.
+//
+model OrderItem {
+  id String @id @default(uuid())
+
+  // ----------------------------------------------------------
+  // ORDER RELATIONSHIP
+  // ----------------------------------------------------------
+
+  orderId String
+  order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  // ----------------------------------------------------------
+  // PRODUCE LISTING RELATIONSHIP
+  // ----------------------------------------------------------
+
+  listingId String
+  listing   ProduceListing @relation(fields: [listingId], references: [id])
+
+  // ----------------------------------------------------------
+  // TRANSACTION SNAPSHOT
+  // ----------------------------------------------------------
+
+  // Snapshot of the produce name at order time.
+  produceName String
+
+  // Quantity purchased.
+  quantityKg Decimal @db.Decimal(12, 2)
+
+  // Snapshot of listing price at order time.
+  unitPrice Decimal @db.Decimal(12, 2)
+
+  // quantityKg * unitPrice
+  subtotal Decimal @db.Decimal(12, 2)
+
+  // ----------------------------------------------------------
+  // TIMESTAMP
+  // ----------------------------------------------------------
+
+  createdAt DateTime @default(now())
+
+  // ----------------------------------------------------------
+  // INDEXES
+  // ----------------------------------------------------------
+
+  // Prevent the same listing from accidentally appearing as
+  // duplicate lines in one order.
+  //
+  // If quantity needs to increase, our application should update
+  // the existing line instead.
+  @@unique([orderId, listingId])
+  @@index([orderId])
+  @@index([listingId])
+}
+
+// ============================================================
+// INVENTORY RESERVATION
+// ============================================================
+//
+// This model is essential for preventing two buyers from
+// purchasing the same remaining inventory.
+//
+// Example:
+//
+// Tomatoes:
+//
+// availableQuantityKg = 1,000
+//
+// Buyer A starts checkout for:
+// 800 kg
+//
+// Instead of immediately marking 800 kg as permanently sold:
+//
+// availableQuantityKg = 200
+// reservedQuantityKg  = 800
+//
+// InventoryReservation:
+// quantityKg = 800
+// status     = ACTIVE
+//
+// If payment succeeds:
+//
+// ACTIVE -> CONVERTED
+//
+// If payment fails/cancels:
+//
+// ACTIVE -> RELEASED
+//
+// If the reservation expires:
+//
+// ACTIVE -> EXPIRED
+//
+// The order service will perform the reservation and quantity
+// update inside a PostgreSQL transaction.
+//
+model InventoryReservation {
+  id String @id @default(uuid())
+
+  // ----------------------------------------------------------
+  // PRODUCE LISTING RELATIONSHIP
+  // ----------------------------------------------------------
+
+  listingId String
+  listing   ProduceListing @relation(fields: [listingId], references: [id])
+
+  // ----------------------------------------------------------
+  // ORDER RELATIONSHIP
+  // ----------------------------------------------------------
+
+  orderId String
+  order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  // ----------------------------------------------------------
+  // RESERVED QUANTITY
+  // ----------------------------------------------------------
+
+  quantityKg Decimal @db.Decimal(12, 2)
+
+  // ----------------------------------------------------------
+  // RESERVATION STATE
+  // ----------------------------------------------------------
+
+  status ReservationStatus @default(ACTIVE)
+
+  // ----------------------------------------------------------
+  // EXPIRATION
+  // ----------------------------------------------------------
+  //
+  // Pending checkout cannot reserve stock forever.
+  //
+  // The order service will decide the actual reservation period.
+  //
+  expiresAt DateTime
+
+  // ----------------------------------------------------------
+  // TIMESTAMPS
+  // ----------------------------------------------------------
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // ----------------------------------------------------------
+  // INDEXES
+  // ----------------------------------------------------------
+
+  // There should only be one reservation for a particular
+  // listing inside a particular order.
+  @@unique([orderId, listingId])
+  // Useful when calculating currently reserved stock for a
+  // particular listing.
+  @@index([listingId, status])
+  // Useful when loading reservations belonging to an order.
+  @@index([orderId])
+  // Useful later when a cleanup job searches for expired ACTIVE
+  // reservations.
+  @@index([expiresAt, status])
+}
+
+model Wallet {
+  id               String   @id @default(uuid())
+  userId           String   @unique
+  availableBalance Decimal  @default(0) @db.Decimal(14, 2)
+  heldBalance      Decimal  @default(0) @db.Decimal(14, 2)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  user    User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  entries WalletLedgerEntry[]
+  holds   PaymentHold[]
+  withdrawals WalletWithdrawal[]
+
+  @@index([userId])
+}
+
+model WalletLedgerEntry {
+  id          String               @id @default(uuid())
+  walletId    String
+  type        WalletEntryType
+  direction   WalletEntryDirection
+  amount      Decimal              @db.Decimal(14, 2)
+  reference   String?
+  description String?
+  createdAt   DateTime             @default(now())
+
+  wallet Wallet @relation(fields: [walletId], references: [id], onDelete: Cascade)
+
+  @@index([walletId, createdAt])
+  @@index([reference])
+}
+
+model WalletDeposit {
+  id                    String        @id @default(uuid())
+  userId                String
+  amount                Decimal       @db.Decimal(14, 2)
+  phone                 String
+  medium                String?
+  status                DepositStatus @default(CREATED)
+  provider              String        @default("FAPSHI")
+  providerTransactionId String?       @unique
+  externalId            String        @unique
+  creditedAt            DateTime?
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([status])
+}
+
+
+model WalletWithdrawal {
+  id                    String           @id @default(uuid())
+  userId                String
+  walletId              String
+  amount                Decimal          @db.Decimal(14, 2)
+  phone                 String
+  medium                String?
+  status                WithdrawalStatus @default(PROCESSING)
+  provider              String           @default("FAPSHI")
+  providerTransactionId String?           @unique
+  externalId            String           @unique
+  successfulAt          DateTime?
+  refundedAt            DateTime?
+  createdAt             DateTime         @default(now())
+  updatedAt             DateTime         @updatedAt
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  wallet Wallet @relation(fields: [walletId], references: [id], onDelete: Restrict)
+
+  @@index([userId, createdAt])
+  @@index([walletId, createdAt])
+  @@index([status])
+}
+
+model PaymentHold {
+  id        String            @id @default(uuid())
+  walletId  String
+  orderId   String            @unique
+  amount    Decimal           @db.Decimal(14, 2)
+  status    PaymentHoldStatus @default(ACTIVE)
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+
+  wallet Wallet @relation(fields: [walletId], references: [id], onDelete: Restrict)
+  order  Order  @relation(fields: [orderId], references: [id], onDelete: Restrict)
+
+  @@index([walletId, status])
+}
+
+
+// ============================================================
+// ORDER DISPUTE
+// ============================================================
+//
+// A buyer may dispute a driver-reported delivery while the payment
+// hold is still protected. The hold remains locked until an ADMIN
+// resolves the dispute. One order can have at most one dispute in
+// this sprint MVP, which keeps resolution idempotent and auditable.
+//
+model Dispute {
+  id          String            @id @default(uuid())
+  orderId     String            @unique
+  openedById  String
+  reason      String
+  status      DisputeStatus     @default(OPEN)
+  resolution  DisputeResolution?
+  adminNote   String?
+  resolvedById String?
+  resolvedAt  DateTime?
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  order      Order @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  openedBy   User  @relation("DisputeOpenedBy", fields: [openedById], references: [id], onDelete: Restrict)
+  resolvedBy User? @relation("DisputeResolvedBy", fields: [resolvedById], references: [id], onDelete: Restrict)
+
+  @@index([status, createdAt])
+  @@index([openedById, createdAt])
+}
+
+model Vehicle {
+  id             String        @id @default(uuid())
+  driverId       String
+  shipments      Shipment[]
+  transportLoads TransportLoad[]
+  registrationNo String        @unique
+  type           VehicleType
+  capacityKg     Decimal       @db.Decimal(12, 2)
+  currentCity    String?
+  status         VehicleStatus @default(ACTIVE)
+  isAvailable    Boolean       @default(true)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  driver DriverProfile @relation(fields: [driverId], references: [id], onDelete: Cascade)
+
+  @@index([driverId])
+  @@index([status, isAvailable])
+  @@index([currentCity])
+}
+
+model Shipment {
+  id             String         @id @default(uuid())
+  shipmentNumber String         @unique
+  orderId        String         @unique
+  driverId       String?
+  vehicleId      String?
+  status         ShipmentStatus @default(AWAITING_ASSIGNMENT)
+
+  pickupCity      String
+  pickupAddress   String?
+  deliveryCity    String
+  deliveryAddress String
+
+  loadWeightKg Decimal @db.Decimal(12, 2)
+
+  assignedAt         DateTime?
+  pickedUpAt         DateTime?
+  deliveryReportedAt DateTime?
+  deliveredAt        DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  order   Order          @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  driver  DriverProfile? @relation(fields: [driverId], references: [id], onDelete: Restrict)
+  vehicle Vehicle?       @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
+
+  events ShipmentEvent[]
+
+  // Optional shared-load membership. A shipment still owns its own order,
+  // payment, tracking events and delivery state; the load only groups transport.
+  transportLoadId String?
+  transportLoad   TransportLoad? @relation(fields: [transportLoadId], references: [id], onDelete: SetNull)
+
+  @@index([status])
+  @@index([driverId, status])
+  @@index([vehicleId, status])
+  @@index([pickupCity, deliveryCity])
+  @@index([transportLoadId, status])
+}
+
+model TransportLoad {
+  id             String              @id @default(uuid())
+  loadNumber     String              @unique
+  vehicleId      String
+  driverId       String
+  status         TransportLoadStatus @default(ASSIGNED)
+  pickupCity     String
+  deliveryCity   String
+  totalWeightKg  Decimal             @db.Decimal(12, 2)
+  assignedAt     DateTime            @default(now())
+  completedAt    DateTime?
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+
+  vehicle   Vehicle       @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
+  driver    DriverProfile @relation(fields: [driverId], references: [id], onDelete: Restrict)
+  shipments Shipment[]
+
+  @@index([vehicleId, status])
+  @@index([driverId, status])
+  @@index([pickupCity, deliveryCity, status])
+}
+
+model ShipmentEvent {
+  id         String            @id @default(uuid())
+  shipmentId String
+  type       ShipmentEventType
+  city       String?
+  note       String?
+  createdAt  DateTime          @default(now())
+
+  shipment Shipment @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+
+  @@index([shipmentId, createdAt])
+}

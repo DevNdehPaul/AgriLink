@@ -1,0 +1,2 @@
+.narrow{max-width:680px}.back{display:inline-block;margin-bottom:16px;color:#176b3a;font-weight:700;font-size:13px}.full{width:100%;margin-top:14px}
+.reason-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.reason-grid button{border:1px solid #dfe3df;background:#fff;padding:10px;border-radius:10px;text-align:left}.reason-grid button.selected{border-color:#176b3a;background:#edf6ef;color:#176b3a;font-weight:700}.evidence-note{font-size:12px;line-height:1.5}

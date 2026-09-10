@@ -1,0 +1,10 @@
+export interface ApiResponse<T>{success:boolean;message:string;data:T}
+export interface Cooperative{id:string;name:string;city?:string;region?:string;locality?:string;verificationStatus?:string}
+export interface ProduceListing{id:string;cooperativeId?:string;name:string;description?:string;pricePerKg:number|string;totalQuantityKg?:number|string;availableQuantityKg:number|string;reservedQuantityKg?:number|string;harvestDate?:string;originCity?:string;pickupLocation?:string;pickupCity?:string;status?:string;createdAt?:string;cooperative:Cooperative}
+export interface OrderItem{id?:string;listingId?:string;produceName:string;quantityKg:number|string;unitPrice?:number|string;unitPricePerKg?:number|string;pricePerKg?:number|string;lineTotal?:number|string;name?:string;subtotal?:number|string;listing?:ProduceListing}
+export interface Shipment{id:string;shipmentNumber?:string;status:string;pickupCity?:string;pickupAddress?:string;deliveryCity?:string;deliveryAddress?:string;loadWeightKg?:number|string;events?:any[];vehicle?:any;driver?:any}
+export interface Order{id:string;orderNumber:string;status:string;subtotal:number|string;deliveryFee:number|string;totalAmount:number|string;deliveryCity:string;deliveryAddress:string;createdAt:string;items:OrderItem[];cooperative:Cooperative;shipment?:Shipment|null;paymentHold?:any;dispute?:any;reservations?:any[]}
+export interface Wallet{id:string;availableBalance:number|string;heldBalance:number|string;currency?:string}
+export interface LedgerEntry{id:string;type:string;direction:string;amount:number|string;reference?:string;description?:string;createdAt:string}
+export interface Deposit{id:string;amount:number|string;phone:string;medium?:string;status:string;providerTransactionId?:string;externalId?:string;createdAt:string;successfulAt?:string}
+export interface User{id:string;fullName:string;email?:string;phone?:string;role:string;status?:string}

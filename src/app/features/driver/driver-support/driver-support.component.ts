@@ -1,0 +1,1 @@
+import {Component} from '@angular/core';@Component({selector:'app-driver-support',standalone:true,templateUrl:'./driver-support.component.html',styleUrl:'./driver-support.component.css'}) export class DriverSupportComponent{}

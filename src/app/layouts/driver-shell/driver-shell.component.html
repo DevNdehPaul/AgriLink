@@ -1,0 +1,23 @@
+<div class="driver-app">
+  <aside class="driver-sidebar" [class.open]="menu">
+    <div class="brand"><div class="brand-mark">A</div><div><b>AgriLink</b><span>Driver workspace</span></div><button class="mobile-close" (click)="close()">×</button></div>
+    <div class="driver-state"><span class="state-dot"></span><div><small>TRANSPORT PARTNER</small><b>{{auth.profile()?.businessName || auth.user()?.fullName || 'Driver'}}</b></div></div>
+    <nav>
+      <span class="nav-label">WORKSPACE</span>
+      <a routerLink="/driver/dashboard" routerLinkActive="active" (click)="close()"><span class="nav-icon">⌂</span><span>Dashboard</span></a>
+      <a routerLink="/driver/shipments" routerLinkActive="active" (click)="close()"><span class="nav-icon">↗</span><span>My Shipments</span></a>
+      <a routerLink="/driver/vehicles" routerLinkActive="active" (click)="close()"><span class="nav-icon">▰</span><span>Vehicles</span></a>
+      <span class="nav-label account-label">ACCOUNT</span>
+      <a routerLink="/driver/notifications" routerLinkActive="active" (click)="close()"><span class="nav-icon">◌</span><span>Notifications</span></a>
+      <a routerLink="/driver/support" routerLinkActive="active" (click)="close()"><span class="nav-icon">?</span><span>Support</span></a>
+      <a routerLink="/driver/profile" routerLinkActive="active" (click)="close()"><span class="nav-icon">○</span><span>Driver Profile</span></a>
+    </nav>
+    <div class="sidebar-foot"><div class="mini-user"><span>{{(auth.user()?.fullName || 'D').charAt(0)}}</span><div><b>{{auth.user()?.fullName}}</b><small>{{auth.profile()?.verificationStatus || 'Driver'}}</small></div></div><button (click)="auth.logout()">Sign out</button></div>
+  </aside>
+  <div class="driver-main">
+    <header class="driver-topbar"><button class="menu-btn" (click)="menu=!menu">☰</button><div class="top-title"><b>Driver Portal</b><span>Move produce. Keep deliveries on track.</span></div><div class="top-actions"><a class="bell" routerLink="/driver/notifications" aria-label="Notifications"><svg viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/></svg></a><a class="avatar" routerLink="/driver/profile">{{(auth.user()?.fullName || 'D').charAt(0)}}</a><button class="top-signout" type="button" (click)="auth.logout()">Sign out</button></div></header>
+    <main><router-outlet></router-outlet></main>
+  </div>
+  <nav class="driver-mobile-nav"><a routerLink="/driver/dashboard" routerLinkActive="active"><span>⌂</span>Home</a><a routerLink="/driver/shipments" routerLinkActive="active"><span>↗</span>Trips</a><a routerLink="/driver/vehicles" routerLinkActive="active"><span>▰</span>Vehicles</a><a routerLink="/driver/profile" routerLinkActive="active"><span>○</span>Account</a></nav>
+  <div class="scrim" *ngIf="menu" (click)="close()"></div>
+</div>

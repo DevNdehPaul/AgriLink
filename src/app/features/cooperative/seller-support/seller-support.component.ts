@@ -1,0 +1,2 @@
+import {Component,inject,ChangeDetectorRef} from '@angular/core';import {CommonModule} from '@angular/common';import {FormsModule} from '@angular/forms';import {RouterLink,ActivatedRoute,Router} from '@angular/router';import {finalize} from 'rxjs';import {ApiService} from '../../../core/api.service';import {AuthService} from '../../../core/auth.service';
+@Component({selector:'app-seller-support',standalone:true,imports:[CommonModule,FormsModule],templateUrl:'./seller-support.component.html',styleUrl:'./seller-support.component.css'}) export class SellerSupportComponent{}
