@@ -1020,7 +1020,7 @@ deployed backend.
 **Maximum length:** 3 minutes
 
 **Video link:**
-`ADD_YOUR_UNLISTED_YOUTUBE_OR_PUBLIC_GOOGLE_DRIVE_LINK_HERE`
+`[ADD_YOUR_UNLISTED_YOUTUBE_OR_PUBLIC_GOOGLE_DRIVE_LINK_HERE](https://drive.google.com/file/d/1uSxaEn_qVkRL2k2Mq905JUrc0WaRV6WH/view?usp=drive_link)`
 
 The video should walk through the actual solution in my own words rather
 than trying to demonstrate every screen. I will focus on:
