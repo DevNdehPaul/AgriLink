@@ -38,6 +38,7 @@
     "@types/swagger-ui-express": "^4.1.8",
     "prisma": "^7.10.0",
     "tsx": "^4.23.13",
-    "typescript": "^7.0.2"
+    "typescript": "^7.0.2",
+    "wrangler": "^4.131.0"
   }
 }

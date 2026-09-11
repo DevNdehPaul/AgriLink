@@ -30,9 +30,16 @@
 //
 // Our Express application imports PrismaClient from there.
 //
-generator client {
+generator nodeClient {
   provider = "prisma-client"
-  output   = "../src/generated/prisma"
+  output   = "../src/generated/prisma-node"
+  runtime  = "nodejs"
+}
+
+generator cloudflareClient {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma-cloudflare"
+  runtime  = "cloudflare"
 }
 
 // ============================================================

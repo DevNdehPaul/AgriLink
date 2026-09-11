@@ -1,0 +1,23 @@
+{
+	"$schema": "./node_modules/wrangler/config-schema.json",
+	"name": "antcode-agri-api",
+	"main": "src/worker.ts",
+	"compatibility_date": "2026-09-11",
+	"compatibility_flags": [
+		"nodejs_compat"
+	],
+	"vars": {
+		"NODE_ENV": "production",
+		"CORS_ORIGINS": "http://localhost:4200,https://agrilink-fd1f9.web.app",
+		"REQUEST_BODY_LIMIT": "256kb",
+		"JWT_ACCESS_EXPIRES_IN": "15m",
+		"JWT_REFRESH_EXPIRES_IN": "7d",
+		"FAPSHI_BASE_URL": "https://sandbox.fapshi.com"
+	},
+	"hyperdrive": [
+		{
+			"binding": "HYPERDRIVE",
+			"id": "1b4a1f8bcc664f82a48f89aaf4901a22"
+		}
+	]
+}

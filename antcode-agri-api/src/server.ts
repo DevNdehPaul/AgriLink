@@ -1,6 +1,21 @@
-import { app } from "./app.js";
+import { PrismaPg } from "@prisma/adapter-pg";
+
+import { createApp } from "./app.js";
 import { env } from "./config/env.js";
-import { prisma } from "./config/prisma.js";
+import { setDefaultPrisma } from "./config/prisma.js";
+import { PrismaClient } from "./generated/prisma-node/client.js";
+
+const adapter = new PrismaPg({
+  connectionString: env.DATABASE_URL,
+});
+
+const prisma = new PrismaClient({
+  adapter,
+});
+
+setDefaultPrisma(prisma);
+
+const app = createApp();
 
 /** Starts the database connection first, then begins accepting HTTP traffic. */
 async function startServer(): Promise<void> {
@@ -25,6 +40,7 @@ async function startServer(): Promise<void> {
         console.error("Graceful shutdown timed out; forcing exit");
         process.exit(1);
       }, 10_000);
+
       forceExit.unref();
 
       server.close(async () => {
@@ -46,7 +62,6 @@ async function startServer(): Promise<void> {
   } catch (error) {
     console.error("Failed to start AntCode Agri API:", error);
 
-    // Best-effort cleanup if startup fails after Prisma was initialized.
     await prisma.$disconnect().catch(() => undefined);
     process.exit(1);
   }

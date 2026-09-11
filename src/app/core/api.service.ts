@@ -3,7 +3,7 @@ import {HttpClient,HttpParams} from '@angular/common/http';
 import {ApiResponse,Order,ProduceListing,Wallet,LedgerEntry,Deposit} from './models';
 @Injectable({providedIn:'root'})
 export class ApiService{
- private http=inject(HttpClient); readonly base='http://localhost:4000/api/v1';
+ private http=inject(HttpClient); readonly base='https://antcode-agri-api.agrimarket.workers.dev/api/v1';
  marketplace(filters:{name?:string;city?:string;minPrice?:number;maxPrice?:number;sort?:string;limit?:number}={}){let p=new HttpParams().set('limit',String(filters.limit??12));Object.entries(filters).forEach(([k,v])=>{if(v!==undefined&&v!==''&&k!=='limit')p=p.set(k,String(v))});return this.http.get<ApiResponse<{items:ProduceListing[];total:number}>>(`${this.base}/produce`,{params:p})}
  produce(id:string){return this.http.get<ApiResponse<{listing:ProduceListing}>>(`${this.base}/produce/${id}`)}
  orders(limit=20){return this.http.get<ApiResponse<{items:Order[];total:number}>>(`${this.base}/orders?limit=${limit}`)}
